@@ -10,9 +10,12 @@ __pycache__/
 dist/
 junit/
 *.log
+
+# Java
 .gradle/
 build/
 java/_cache/
+java/*/bin/
 java/*/gradle/dependency-locks/*.latest.lockfile
 
 # Editors / OS
