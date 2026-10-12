@@ -1,25 +1,17 @@
 *.log
-*.swp
-.DS_Store
-.idea/
-.vscode/
-CLAUDE.local.md
 dist/
 
 # Python
-*.egg-info/
 *.py[cod]
-.hypothesis/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
 .venv/
 __pycache__/
+junit/
 
 # Java
 .gradle/
 build/
 java/*/bin/
 java/*/gradle/dependency-locks/*.latest.lockfile
-java/_cache/
-junit/
