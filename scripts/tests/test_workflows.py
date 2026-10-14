@@ -61,6 +61,8 @@ def test_ci_status_is_the_fan_in() -> None:
 def test_typescript_checks_tarball_and_clean_consumer_after_testing() -> None:
     workflow = yaml.safe_load((REPO / ".github/workflows/_typescript-plugin.yml").read_text())
     steps = workflow["jobs"]["test"]["steps"]
+    setup_node = next(step for step in steps if step.get("uses", "").startswith("actions/setup-node@"))
+    assert setup_node["with"]["check-latest"] is True
     test = next(step for step in steps if step.get("name") == "Lint and test")
     build = next(step for step in steps if step.get("name") == "Build and verify npm package")
     assert steps.index(test) < steps.index(build)

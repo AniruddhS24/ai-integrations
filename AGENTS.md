@@ -134,7 +134,8 @@ version is `0.1.0-RC1`; workflow streams and OpenTelemetry never migrate here.
   in `typescript/_shared/`.
 - Coordinates and root APIs are `@temporalio/<name>`. The development version is
   `0.0.0`. Node 22.12.0 is the minimum (provider packages require Node 22 and
-  unflagged CommonJS loading of ES modules); CI also tests Node 24. Use pnpm 10.27.0
+  unflagged CommonJS loading of ES modules); CI tests the latest Node 22.x and 24.x
+  using major selectors with `check-latest: true`. Use pnpm 10.27.0
   and `make sync`, `make lint`, `make test`, `make build`.
 - SDK and Workflow Streams dependencies use published npm coordinates. The
   unpublished SDK test helpers are copied into each consuming plugin's

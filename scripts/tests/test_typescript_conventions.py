@@ -29,7 +29,7 @@ maturity = "pre-release"
 [release]
 allow-final = false
 [ci]
-runtime-versions = ["22.12.0", "24"]
+runtime-versions = ["22", "24"]
 [smoke]
 imports = ["@temporalio/fake"]
 ''')
@@ -63,7 +63,7 @@ def test_typescript_rejects_wrong_runtime_floor_and_missing_lock(repo: Path) -> 
     plugin = _plugin(repo)
     (plugin.path / "pnpm-lock.yaml").unlink()
     meta = plugin.path / "plugin.toml"
-    meta.write_text(meta.read_text().replace('runtime-versions = ["22.12.0", "24"]', 'runtime-versions = ["24"]'))
+    meta.write_text(meta.read_text().replace('runtime-versions = ["22", "24"]', 'runtime-versions = ["24"]'))
     checker = Checker(repo)
     checker.check_typescript_plugin(plugin)
     assert any("missing pnpm-lock.yaml" in error for error in checker.violations)

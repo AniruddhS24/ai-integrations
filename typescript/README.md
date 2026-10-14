@@ -3,6 +3,8 @@
 Each plugin is an independent pnpm project with its own manifest and lockfile.
 There is no language-level workspace or lockfile. Node.js 22.12 or later and
 pnpm 10.27.0 are required.
+CI selects `"22"` and `"24"` with `check-latest: true` to test the latest release
+in each major series.
 
 ```bash
 cd typescript/openai-agents

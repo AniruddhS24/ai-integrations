@@ -258,8 +258,9 @@ class Checker:
             self.fail(f"{rel}: allow-final must be boolean")
         versions = meta.get("ci", {}).get("runtime-versions", [])
         floor = package.get("engines", {}).get("node", "").removeprefix(">=")
-        if not versions or versions[0] != floor:
-            self.fail(f"{rel}: first runtime-versions entry must match the Node engine floor")
+        if (not versions or not all(isinstance(version, str) and version.isdigit() for version in versions)
+                or versions[0] != floor.split(".")[0]):
+            self.fail(f"{rel}: runtime-versions must list Node majors starting with the Node engine floor's major")
         if meta.get("smoke", {}).get("imports") != [coordinate]:
             self.fail(f"{rel}: smoke imports must name the root package")
         for section in ("dependencies", "peerDependencies", "optionalDependencies", "devDependencies"):
