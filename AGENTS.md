@@ -36,18 +36,31 @@ resources (`python/_shared/`, `python/_template/`) and are ignored by CI discove
 | `python/langsmith` | `temporalio-langsmith` | 0.1.0 | Public Preview | `temporalio.langsmith` |
 | `python/openai_agents` | `temporalio-openai-agents` | 1.0.0 | Generally Available | `temporalio.openai_agents` |
 | `python/strands_agents` | `temporalio-strands-agents` | 0.1.0 | Public Preview | `temporalio.strands_agents` |
+| `python/typesafe` | `temporalio-typesafe` | 0.0.1 | Pre-release | `temporalio.typesafe` |
 | `typescript/vercel-ai-sdk` | `@temporalio/vercel-ai-sdk` | 1.0.0 | Generally Available | `@temporalio/vercel-ai-sdk` |
 | `typescript/google-adk` | `@temporalio/google-adk` | 0.1.0 | Public Preview | `@temporalio/google-adk` |
 | `typescript/langsmith` | `@temporalio/langsmith` | continues (1.24.0 next) | Public Preview | `@temporalio/langsmith` |
 | `typescript/openai-agents` | `@temporalio/openai-agents` | continues (1.24.0 next) | Generally Available | `@temporalio/openai-agents` |
 | `typescript/strands-agents` | `@temporalio/strands-agents` | continues (1.24.0 next) | Pre-release | `@temporalio/strands-agents` |
 | `java/spring-ai` | `io.temporal:spring-ai` | 0.1.0 (0.1.0-RC1 planned) | Public Preview | `io.temporal.springai` |
-| `go/googleadk` | `go.temporal.io/sdk/contrib/googleadk` | continues (v0.3.0 next) | Public Preview | `googleadk` |
+| `go/googleadk` | `go.temporal.io/googleadk` | 0.1.0 (new coordinate) | Public Preview | `googleadk` |
 
 "First version here" values are informational; the registry is the source of truth for the
-version policy (below). The Go row has an unresolved problem: a module served by the static vanity
-site cannot live in a monorepo subdirectory under an unchanged import path; decide (split mirror
-repo, new import path, or staying in sdk-go) before that migration.
+version policy (below). Go plugins use `go.temporal.io/<name>` module paths and live under
+`go/<name>/`. Before publishing, the vanity site must route each module to this repository's
+subdirectory. The [Go module reference](https://go.dev/ref/mod#vcs-find) documents the fourth
+`go-import` field for subdirectories, supported since Go 1.25. Google ADK requires Go 1.26.6,
+so its mapping can be:
+
+```html
+<meta name="go-import" content="go.temporal.io/googleadk git https://github.com/temporalio/ai-integrations go/googleadk">
+```
+
+Its tags are `go/googleadk/v<version>`. `go/googleadk` is now owned here under the new module
+path; its active `upstream` metadata is removed, so do not re-sync it. Imported history remains
+intact, and the inherited changelog is kept only in Git history. UUID and span random-stream
+identifiers retain their original strings for replay compatibility. The shared Go release
+workflow is available; final releases here remain disabled until vanity routing is verified.
 
 Naming derivation, enforced by `scripts/ci/check_conventions.py`: folder name = `plugin.toml`
 `name`; Python coordinate = `temporalio-` + name with `_` replaced by `-`; Python root API =
@@ -116,15 +129,62 @@ version is `0.1.0-RC1`; workflow streams and OpenTelemetry never migrate here.
 
 One entry workflow, one reusable workflow per language, plugin as a parameter, no secrets.
 
-- `.github/workflows/ci.yml` (`pull_request`, `merge_group`, push to `main`, nightly, dispatch). Job `changes` runs `scripts/ci/detect_changes.py`: plugins are discovered from `<language>/*/<manifest>` (ignoring `_*`); a changed file under a plugin selects that plugin; a non-plugin file under a language root selects every plugin of that language; `.github/**` and `scripts/ci/**` select everything; `scripts/release/**` and `scripts/migrate/**` select only the script tests; push to `main`, nightly and dispatch select everything. Job `conventions` checks repository invariants and runs the script tests. Job `python` calls `_python-plugin.yml` once per selected plugin. Job `java` calls `_java-plugin.yml` for selected Java plugins. Job `ci-status` fans in and is the only required check (skipped upstream jobs count as success).
+- `.github/workflows/ci.yml` (`pull_request`, `merge_group`, push to `main`, nightly, dispatch). Job `changes` runs `scripts/ci/detect_changes.py`: plugins are discovered from `<language>/*/<manifest>` (ignoring `_*`); a changed file under a plugin selects that plugin; a non-plugin file under a language root selects every plugin of that language; `.github/**` and `scripts/ci/**` select everything; `scripts/release/**` and `scripts/migrate/**` select only the script tests; push to `main`, nightly and dispatch select everything. Job `conventions` checks repository invariants and runs the script tests. Jobs `python`, `java`, and `go` call their per-language reusable workflows once per selected plugin. Job `ci-status` fans in and is the only required check (skipped upstream jobs count as success).
 - `.github/workflows/_python-plugin.yml`: job `matrix` reads `plugin.toml` `runtime-versions` and emits the same matrix for every run, pull requests included (ubuntu at the min and max versions, macOS and Windows at max); job `test` runs `make sync` (or `sync-latest` on nightly runs), `make lint`, `make test`, then, on the ubuntu/max cell only, the `python-build-check` composite action (`make build`, `check_wheel.py`, isolated `smoke.py` on wheel and sdist). Windows runners install GNU make with choco.
-- Dependencies: ordinary CI uses the committed lockfile; local `make sync` uses the existing lockfile. Nightly runs every plugin with the newest allowed dependencies (`sync-latest`) without committing the updated lock; manual dispatch can select that mode too. Shared lint, test and format targets use `uv run --locked` to preserve the dependency versions selected during sync.
+- `.github/workflows/_go-plugin.yml`: uses the same matrix generator and platform layout with each plugin's Go `runtime-versions`. Every cell runs `make sync` (or `sync-latest`), `make lint`, `make test`, and `make build`; the ubuntu/max cell enables `-race`. `GOTOOLCHAIN=local` prevents dependencies from silently replacing the runtime under test. Windows runners install GNU make with choco. Go action caching keys include the plugin's `go.mod` and `go.sum`.
+- Dependencies: ordinary CI uses the committed lockfile (`go.mod`/`go.sum` for Go); local `make sync` uses the existing versions. Nightly runs every plugin with the newest allowed dependencies (`sync-latest`) without committing the updated lock; manual dispatch can select that mode too. Python make targets use `uv run --locked`; Go lint, test and build use `-mod=readonly` to preserve the versions selected during sync. Go `sync-latest` runs `go get -u -t ./...`, tidies the module and verifies its checksums.
 - Required checks on `main`: `ci-status`, `Check for CODEOWNERS` and `opengrep/scan` (the last two are org-enforced workflows that run automatically on every PR), plus one approving review from a code owner; `license/cla` joins once the CLA app is installed. Do not add a local opengrep caller; the org one already runs. TRANSITION(sdk-cutover): branch protection, the `testpypi`/`pypi` environments (tag policy `python/*/v*`) and the release-tag ruleset were configured by hand on 2026-09-09. The `pypi` required-reviewer gate was removed on 2026-10-07.
-- Nightly failures: `scripts/ci/nightly_report.py` opens or updates one `nightly` issue per failing plugin from the job names `Python (<plugin>) / ...` and `Java (<plugin>) / ...`; `scripts/tests/test_nightly_report.py` fails if `ci.yml` renames those jobs.
+- Nightly failures: `scripts/ci/nightly_report.py` opens or updates one `nightly` issue per failing plugin from the job names `Python (<plugin>) / ...`, `Java (<plugin>) / ...`, and `Go (<plugin>) / ...`; `scripts/tests/test_nightly_report.py` fails if `ci.yml` renames those jobs. Existing Python and Java issue titles stay unchanged; Go keys use `go/<plugin>` so plugins in different languages cannot share an issue.
 
 ## Releases
 
 Trusted publishing by ecosystem: PyPI uses OIDC trusted publishing (`pypa/gh-action-pypi-publish`, no stored token; PyPI cannot bind a reusable workflow, so publish jobs live inline in `release-python.yml`). npm supports OIDC trusted publishing (GitHub-hosted runners, npm >= 11.5.1, one publisher per package, register the calling workflow's filename; provenance is automatic for a public repo and package). Maven Central has no OIDC: Central Portal user token plus GPG signing, kept as environment-scoped secrets. Go has nothing to upload: an immutable tag plus `sum.golang.org` is the release.
+
+### Go releases
+
+`.github/workflows/release-go.yml` handles every Go plugin. It runs on pushes of
+`go/*/v*` tags, published Go GitHub Releases, and manual dispatch. Go versions use
+canonical SemVer (`0.1.0`, `0.1.0-rc.1`), with no build metadata. The shared release
+tool checks the module path, maturity's first version, and forward ordering against
+`proxy.golang.org`, including retracted releases. A re-run of the newest version is
+allowed. Final versions require `allow-final = true` and no transition markers.
+The currently supported vanity coordinates have no `/vN` suffix; v2+ requires a
+module-path cutover before the release tooling can support it.
+
+The full `_go-plugin.yml` matrix tests locked dependencies at one pinned commit,
+including race detection on Ubuntu/max. Tagged runs additionally verify the
+four-field vanity mapping, download the exact public version with a clean module
+cache and `sum.golang.org` verification, compare the complete module zip and
+`go.mod` bytes with that tested checkout, and build a clean consumer importing the
+root package. Temporary proxy propagation failures are retried. The workflow uses
+read-only repository permissions and creates no tags or GitHub Releases.
+
+**Pushing a Go tag makes the version discoverable before CI finishes.** A GitHub
+draft does not hide the tag from Go consumers. Run the dry run before tagging:
+
+1. Merge the release changes to `main`. Configure the vanity mapping above and
+   include Go tags in the protected release-tag ruleset. Enable `allow-final` only
+   after routing is ready. Do not alter `go.mod` dependency versions for a release.
+2. Dispatch `gh workflow run release-go.yml --ref main -f tag=go/<name>/v<version>`.
+   Branch dispatches always validate, test and build without consuming a tag or
+   fetching the proposed module. An explicit `-f dry-run=true` does the same for
+   an existing tag ref. While final releases are disabled, use `0.1.0-rc.1` for
+   the Google ADK dry run.
+3. After the full matrix succeeds, create an annotated `go/<name>/v<version>` tag
+   on that exact tested main commit and push it. The tag run repeats the matrix
+   and verifies the public module. Tags are immutable; a failed release requiring
+   changed source gets the next version, such as `0.1.0-rc.2`.
+4. Generate reviewed notes with `uv run --project scripts --locked python
+   scripts/release/release_tool.py release-notes --plugin-dir go/<name>
+   --tag go/<name>/v<version> --output /tmp/release-notes.md`, then create a draft
+   GitHub Release for the existing tag. Publish it after verification succeeds;
+   mark it as a GitHub pre-release for prerelease versions or Pre-release maturity.
+   The publication run checks that classification without modifying the release.
+5. For a proxy or consumer verification failure, re-run failed jobs or dispatch
+   `release-go.yml` on the same tag ref with no tag input. Never move or delete
+   the tag. A missing vanity mapping must be repaired before retrying.
+
+### Python releases
 
 Every Python plugin uses the `testpypi` and `pypi` GitHub environments without required reviewers, regardless of maturity. Both environments allow the `python/*/v*` tag pattern and `main` for validated publication recovery. Publishing the GitHub Release starts the release pipeline; eligible versions upload to PyPI automatically after the full test matrix and TestPyPI verification succeed. Trusted publishers remain bound to their existing environment names.
 
@@ -207,6 +267,9 @@ coordinate's relocation POM separately after the new package is public. The reti
 for this new pipeline. Snapshot publishing is not configured.
 
 ## Migration and re-sync
+
+Go history imports use `scripts/migrate/extract-sdk-go.sh` and the Go section of
+`scripts/migrate/README.md`, with the same default-branch and merge-commit requirements below.
 
 `scripts/migrate/extract-sdk-python.sh` plus `scripts/migrate/README.md` are the procedure. Only commits reachable from the upstream repository's default branch qualify as imported history. Work from an unmerged or closed PR, feature branch or fork is ordinary local work: do not apply `history-import` and do not add it to `scripts/migrate/IMPORTS.md`. Commit count, `Migrated-From` trailers and use of the migration tooling do not change that classification. For valid imports, find every historical path first; the script is frozen after a plugin's first import; label the PR `history-import` and merge it with a merge commit; keep adaptation files in separate commits on top; and record every import and re-sync in `IMPORTS.md`. Expected verification numbers are in the migration README.
 

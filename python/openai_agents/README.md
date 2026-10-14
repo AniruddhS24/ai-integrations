@@ -385,6 +385,23 @@ Code running in the workflow can also invoke a Temporal activity directly when n
 
 Tools that run in the workflow can also update OpenAI Agents context, which is read-only for tools run as Temporal activities.
 
+### Resuming a `RunState` after tool approvals
+
+A workflow can pause a run for tool approval (`@function_tool(needs_approval=True)`) and resume it later,
+including across `continue_as_new`, by serializing the state with `RunState.to_string()` and restoring it
+with the regular Agents SDK API. Model calls from the resumed run still execute as Temporal activities.
+
+```python
+result = await Runner.run(agent, "Transfer $5")
+state_string = result.to_state().to_string()  # carry this over continue_as_new
+
+# later, possibly in a new run
+state = await RunState.from_string(agent, state_string)
+for interruption in state.get_interruptions():
+    state.approve(interruption)
+result = await Runner.run(agent, state)  # or Runner.run_streamed(agent, state)
+```
+
 ## MCP Support
 
 The durable MCP integration uses MCP Python SDK v2 and the optional `mcp`
@@ -850,11 +867,34 @@ Note that when using network-accessible MCP servers, you also can also use the t
 
 ### Sessions
 
-SQLite storage is not suited to a distributed environment.
+Use `WorkflowSession` for conversation history across multiple agent runs in a
+single workflow execution:
 
-| Feature       | Supported |
-| :------------ | :-------: |
-| SQLiteSession |    No     |
+```python
+from agents import Agent, Runner
+from temporalio import workflow
+from temporalio.openai_agents import WorkflowSession
+
+@workflow.defn
+class Conversation:
+    @workflow.run
+    async def run(self) -> str:
+        agent = Agent(name="Assistant")
+        session = WorkflowSession("conversation")
+        await Runner.run(agent, "My name is Ada.", session=session)
+        result = await Runner.run(agent, "What is my name?", session=session)
+        return result.final_output
+```
+
+Keep the same session instance for each turn. The items live in workflow state
+and are reconstructed on replay after a worker restart. A second workflow
+execution, even one that uses the same `session_id`, starts with an empty session.
+SQLite storage is not suited to a distributed workflow environment.
+
+| Feature         | Supported |
+| :-------------- | :-------: |
+| WorkflowSession |    Yes    |
+| SQLiteSession   |    No     |
 
 ### Tracing
 
