@@ -654,7 +654,7 @@ export class GoogleAdkPlugin extends SimplePlugin {
    *     (`payloadConverterPath` / `failureConverterPath`) evaluate *before*
    *     interceptor modules, so a converter module that itself imports
    *     `@google/adk`/`@google/genai` must import
-   *     `@temporalio/google-adk-agents/workflow` (or `./load-polyfills`) first
+   *     `@temporalio/google-adk/workflow` (or `./load-polyfills`) first
    *     to install the polyfills.
    *  4. **`workflowInterceptorModules`** next gets the `auto-route` module
    *     (unless `autoRouteModels: false`), which re-registers ADK's built-in

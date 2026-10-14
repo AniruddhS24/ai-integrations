@@ -6,7 +6,7 @@
  * Import from the `./testing` subpath:
  *
  *   import { FakeLlm, fakeModelProvider, mockMCPToolset } from
- *     '@temporalio/google-adk-agents/testing';
+ *     '@temporalio/google-adk/testing';
  */
 
 import type { FunctionDeclaration } from '@google/genai';

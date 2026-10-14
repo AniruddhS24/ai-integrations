@@ -1,18 +1,15 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": [
+    "@tsconfig/node20/tsconfig.json",
+    "../_shared/tsconfig.json"
+  ],
   "compilerOptions": {
     "outDir": "./lib",
     "rootDir": "./src",
     "stripInternal": true
   },
-  "references": [
-    { "path": "../../packages/activity" },
-    { "path": "../../packages/client" },
-    { "path": "../../packages/common" },
-    { "path": "../../packages/plugin" },
-    { "path": "../../packages/testing" },
-    { "path": "../../packages/worker" },
-    { "path": "../../packages/workflow" }
-  ],
-  "include": ["./src/**/*.ts"]
+  "references": [],
+  "include": [
+    "./src/**/*.ts"
+  ]
 }

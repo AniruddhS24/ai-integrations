@@ -1,6 +1,7 @@
 import { Headers } from 'headers-polyfill';
 import structuredClonePolyfill from '@ungap/structured-clone';
 import * as webStreamsPolyfill from 'web-streams-polyfill';
+import { decodeBase64, encodeBase64 } from './base64';
 
 /**
  * Installs the Web-API globals that the AI SDK needs inside the workflow sandbox: `Headers`,
@@ -14,6 +15,10 @@ import * as webStreamsPolyfill from 'web-streams-polyfill';
  * the workflow bundle's webpack entry so it runs before any other workflow module.
  */
 export function installPolyfills(): void {
+  // SDK 1.24.0 predates the Worker's base64 globals. Preserve native versions
+  // when running on an SDK that already supplies them.
+  if (typeof globalThis.atob === 'undefined') globalThis.atob = decodeBase64;
+  if (typeof globalThis.btoa === 'undefined') globalThis.btoa = encodeBase64;
   if (typeof globalThis.Headers === 'undefined') {
     globalThis.Headers = Headers;
   }

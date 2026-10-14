@@ -37,7 +37,7 @@ import { getRandomStream, type WorkflowRandomStream } from '@temporalio/workflow
  * own `getRandomStream('…')` and the workflow's default `Math.random()` are
  * unaffected by how many ids ADK draws.
  */
-const STREAM_NAME = '@temporalio/google-adk-agents';
+const STREAM_NAME = '@temporalio/google-adk';
 
 function stream(): WorkflowRandomStream {
   return getRandomStream(STREAM_NAME);

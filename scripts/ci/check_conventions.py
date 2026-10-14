@@ -23,6 +23,7 @@ Checks (see AGENTS.md, "Repository invariants" and "Python conventions"):
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import stat
 import subprocess
@@ -233,6 +234,50 @@ class Checker:
         if any(path.name.upper().startswith("CHANGELOG") for path in d.iterdir()):
             self.fail(f"{rel}: release notes are generated; no changelog files")
 
+    def check_typescript_plugin(self, plugin: Plugin) -> None:
+        d, rel = plugin.path, plugin.rel
+        for required in ("package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "plugin.toml",
+                         "tsconfig.json", "Makefile", "README.md", "LICENSE"):
+            if not (d / required).is_file():
+                self.fail(f"{rel}: missing {required}")
+        if not (d / "plugin.toml").is_file():
+            return
+        package = json.loads((d / "package.json").read_text())
+        meta = load_toml(d / "plugin.toml")
+        coordinate = f"@temporalio/{plugin.name}"
+        p = meta.get("plugin", {})
+        for key, expected in {"name": plugin.name, "language": "typescript", "registry": "npm",
+                              "coordinate": coordinate, "root-api": coordinate}.items():
+            if p.get(key) != expected:
+                self.fail(f"{rel}: plugin.toml {key} must be {expected!r}")
+        if package.get("name") != coordinate or package.get("version") != "0.0.0":
+            self.fail(f"{rel}: package.json must name {coordinate} with development version 0.0.0")
+        if p.get("maturity") not in MATURITY_CLASSIFIER:
+            self.fail(f"{rel}: invalid maturity")
+        if not isinstance(meta.get("release", {}).get("allow-final"), bool):
+            self.fail(f"{rel}: allow-final must be boolean")
+        versions = meta.get("ci", {}).get("runtime-versions", [])
+        floor = package.get("engines", {}).get("node", "").removeprefix(">=")
+        if not versions or versions[0] != floor:
+            self.fail(f"{rel}: first runtime-versions entry must match the Node engine floor")
+        if meta.get("smoke", {}).get("imports") != [coordinate]:
+            self.fail(f"{rel}: smoke imports must name the root package")
+        for section in ("dependencies", "peerDependencies", "optionalDependencies", "devDependencies"):
+            for name, version in package.get(section, {}).items():
+                if name == "@temporalio/test-helpers" and section == "devDependencies" and version == "link:tests/helpers":
+                    continue
+                if version.startswith(("workspace:", "link:", "file:")):
+                    self.fail(f"{rel}: {section} {name} must use a published registry coordinate")
+        license_path = d / "LICENSE"
+        if not license_path.is_file() or license_path.is_symlink():
+            self.fail(f"{rel}: LICENSE must be a regular file")
+        elif f"{rel}/LICENSE" not in self.tracked_files(rel):
+            self.fail(f"{rel}: LICENSE must be committed")
+        elif license_path.read_bytes() != (self.root / "LICENSE").read_bytes():
+            self.fail(f"{rel}: LICENSE differs from root")
+        if any(path.name.upper().startswith("CHANGELOG") for path in d.iterdir()):
+            self.fail(f"{rel}: release notes are generated; no changelog files")
+
     def check_plugin_toml(self, plugin: Plugin, meta: dict[str, Any], pyproject: dict[str, Any]) -> None:
         rel = plugin.rel
         p = meta.get("plugin")
@@ -373,6 +418,8 @@ class Checker:
             self.check_python_plugin(plugin)
         for plugin in discovered["java"]:
             self.check_java_plugin(plugin)
+        for plugin in discovered["typescript"]:
+            self.check_typescript_plugin(plugin)
         if nightly:
             self.check_nightly(discovered["python"])
         return self.violations

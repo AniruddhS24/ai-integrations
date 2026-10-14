@@ -1,6 +1,6 @@
 # OpenAI Agents SDK Integration for Temporal
 
-> ⚠️ **This package is currently at an experimental release stage.** ⚠️
+Release stage: Generally Available.
 
 Run [OpenAI Agents SDK](https://github.com/openai/openai-agents-js) agents as Temporal Workflows. Agent orchestration runs in the Workflow; model calls run as Activities, so they retry durably and are not repeated during Workflow replay.
 

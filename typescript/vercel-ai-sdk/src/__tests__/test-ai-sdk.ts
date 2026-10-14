@@ -39,7 +39,7 @@ import {
   OpenTelemetryWorkflowClientInterceptor,
 } from '@temporalio/interceptors-opentelemetry';
 import { workflowInterceptorModules } from '@temporalio/testing';
-import { bundleWorkflowCode, DefaultLogger, Runtime, Worker as CoreWorker } from '@temporalio/worker';
+import { bundleWorkflowCode, DefaultLogger, Worker as CoreWorker } from '@temporalio/worker';
 import type { InjectedSinks } from '@temporalio/worker';
 import type { BaseContext } from '@temporalio/test-helpers';
 import {
@@ -525,10 +525,11 @@ test('Embedding model generates embeddings', async (t) => {
   });
 });
 
-test('Telemetry', async (t) => {
+test.serial('Telemetry', async (t) => {
   if (remoteTests) {
     t.timeout(120 * 1000);
   }
+  let otel: opentelemetry.NodeSDK | undefined;
   try {
     const spans = Array<opentelemetry.tracing.ReadableSpan>();
 
@@ -544,7 +545,7 @@ test('Telemetry', async (t) => {
         // Nothing to shutdown
       },
     };
-    const otel = new opentelemetry.NodeSDK({
+    otel = new opentelemetry.NodeSDK({
       resource: staticResource,
       traceExporter,
     });
@@ -554,6 +555,8 @@ test('Telemetry', async (t) => {
     };
 
     const worker = await Worker.create({
+      connection: t.context.env.nativeConnection,
+      namespace: t.context.env.namespace,
       plugins: [
         new AiSdkPlugin({
           modelProvider: remoteTests ? openai : new TestProvider(helloWorkflowGenerator()),
@@ -579,6 +582,8 @@ test('Telemetry', async (t) => {
     });
 
     const client = new WorkflowClient({
+      connection: t.context.env.connection,
+      namespace: t.context.env.namespace,
       interceptors: [new OpenTelemetryWorkflowClientInterceptor()],
     });
     await worker.runUntil(async () => {
@@ -588,7 +593,6 @@ test('Telemetry', async (t) => {
         args: ['Tell me about recursion'],
       });
     });
-    await otel.shutdown();
     t.log(
       'exported spans:',
       spans.map(({ name }) => name)
@@ -598,8 +602,7 @@ test('Telemetry', async (t) => {
     const generateSpan = spans.find(({ name }) => name === `invoke_agent gpt-4o-mini`);
     t.true(generateSpan !== undefined);
   } finally {
-    // Cleanup the runtime so that it doesn't interfere with other tests
-    await Runtime._instance?.shutdown();
+    await otel?.shutdown();
   }
 });
 

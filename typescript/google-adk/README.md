@@ -1,4 +1,6 @@
-# @temporalio/google-adk-agents
+# @temporalio/google-adk
+
+Release stage: Public Preview.
 
 Run [Google Agent Development Kit](https://github.com/google/adk-js) (`@google/adk`)
 agents as durable [Temporal](https://temporal.io) Workflows.
@@ -18,7 +20,7 @@ wrap an existing Temporal Activity with `activityAsTool`.
 ## Install
 
 ```bash
-npm install @temporalio/google-adk-agents
+npm install @temporalio/google-adk
 ```
 
 The supported peer range is `@google/adk` `>=2.0.0 <2.1.0` and `@google/genai`
@@ -47,7 +49,7 @@ Register `GoogleAdkPlugin` on the Worker. Everything else is ordinary ADK code.
 
 ```typescript
 import { InMemoryRunner, LlmAgent, isFinalResponse, stringifyContent } from '@google/adk';
-import { TemporalModel } from '@temporalio/google-adk-agents/workflow';
+import { TemporalModel } from '@temporalio/google-adk/workflow';
 
 export async function askAgent(prompt: string): Promise<string> {
   const agent = new LlmAgent({
@@ -75,7 +77,7 @@ export async function askAgent(prompt: string): Promise<string> {
 
 ```typescript
 import { Worker } from '@temporalio/worker';
-import { GoogleAdkPlugin } from '@temporalio/google-adk-agents';
+import { GoogleAdkPlugin } from '@temporalio/google-adk';
 
 const worker = await Worker.create({
   taskQueue: 'adk',
@@ -247,7 +249,7 @@ but its request runs on until the toolset's own timeout.
 Use `activityAsTool` to expose an existing Temporal Activity to the agent:
 
 ```typescript
-import { activityAsTool } from '@temporalio/google-adk-agents/workflow';
+import { activityAsTool } from '@temporalio/google-adk/workflow';
 import { Type } from '@google/genai';
 
 const lookupTool = activityAsTool({
@@ -267,7 +269,7 @@ timeouts** below). Use `activityNode` to make a registered Activity a node:
 
 ```typescript
 import { InMemoryRunner, JoinNode, Workflow } from '@google/adk';
-import { activityNode } from '@temporalio/google-adk-agents/workflow';
+import { activityNode } from '@temporalio/google-adk/workflow';
 
 const fetchA = activityNode({ name: 'fetchData', nodeName: 'fetch_a', args: () => ['a'] });
 const fetchB = activityNode({ name: 'fetchData', nodeName: 'fetch_b', args: () => ['b'] });
@@ -378,7 +380,7 @@ import {
   pendingHitlRequests,
   type HitlConfirmation,
   type HitlRequest,
-} from '@temporalio/google-adk-agents/workflow';
+} from '@temporalio/google-adk/workflow';
 
 export const pendingQuery = defineQuery<HitlRequest[]>('pending');
 export const respondUpdate = defineUpdate<void, [string, unknown]>('respond');
@@ -578,7 +580,7 @@ Import test doubles from the `./testing` entry point to unit-test agents
 without a live model or MCP server:
 
 ```typescript
-import { fakeModelProvider, mockMCPToolset } from '@temporalio/google-adk-agents/testing';
+import { fakeModelProvider, mockMCPToolset } from '@temporalio/google-adk/testing';
 
 const plugin = new GoogleAdkPlugin({
   modelProvider: fakeModelProvider(),
@@ -639,7 +641,7 @@ Cautions:
 - Custom payload/failure converter modules (`payloadConverterPath` /
   `failureConverterPath`) evaluate **before** the plugin's polyfill loader. If
   such a module imports `@google/adk` / `@google/genai`, import
-  `@temporalio/google-adk-agents/workflow` first: it installs the sandbox
+  `@temporalio/google-adk/workflow` first: it installs the sandbox
   polyfills ADK needs.
 
 ## Determinism notes

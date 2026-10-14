@@ -1,5 +1,7 @@
 # @temporalio/langsmith — LangSmith tracing for Temporal
 
+Release stage: Public Preview.
+
 This plugin makes [LangSmith](https://docs.smith.langchain.com/) observability
 work inside Temporal Workflows and Activities **without changing your existing
 instrumentation**. Code you already trace with LangSmith's native `traceable`

@@ -2,7 +2,7 @@
  * A custom payload-converter module that imports `@google/adk`, following the
  * documented workaround: converter modules evaluate before interceptor modules
  * (so before the plugin's polyfill loader), and must therefore import
- * `@temporalio/google-adk-agents/workflow` first to install the sandbox
+ * `@temporalio/google-adk/workflow` first to install the sandbox
  * polyfills themselves. The E2E test bundles the tsc-compiled CommonJS form of
  * this file (`lib/__tests__/adk-converter.js`), where every `require` is eager
  * — the module layout that crashed on the `performance` global before the

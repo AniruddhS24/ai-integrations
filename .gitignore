@@ -1,6 +1,12 @@
 *.log
 dist/
 
+# TypeScript
+node_modules/
+lib/
+*.tsbuildinfo
+.test-results/
+
 # Python
 *.py[cod]
 .mypy_cache/

@@ -34,7 +34,7 @@ export interface AiSdkPluginOptions {
  * A Temporal plugin that integrates AI SDK providers for use in workflows.
  * This plugin creates activities that allow workflows to invoke AI models.
  *
- * Workflow code should import from `@temporalio/ai-sdk/workflow` (not the package root) so the
+ * Workflow code should import from `@temporalio/vercel-ai-sdk/workflow` (not the package root) so the
  * workflow bundle doesn't pull in the worker-side activities and their disallowed imports.
  *
  * @experimental The AI SDK plugin is an experimental feature; APIs may change without notice.
@@ -67,7 +67,7 @@ export class AiSdkPlugin extends SimplePlugin {
     // so this guarantees the Web-API globals (`TransformStream`, `Headers`,
     // ...) exist before `ai` is evaluated (it defines `class ... extends
     // TransformStream` at module scope), making the relative import order of
-    // `@temporalio/ai-sdk/workflow` and `ai` in workflow code irrelevant.
+    // `@temporalio/vercel-ai-sdk/workflow` and `ai` in workflow code irrelevant.
     const polyfillPath = require.resolve('./preload-polyfills');
     const baseOptions = super.configureBundler(options);
     const existingHook = baseOptions.webpackConfigHook;
