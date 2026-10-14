@@ -40,8 +40,9 @@ development-only link. No plugin depends on another plugin's checkout.
 Vercel's test telemetry uses its provisioned server rather than localhost:7233.
 Its Web API installer supplies deterministic base64 fallbacks for the published
 SDK 1.24.0; upstream added Worker-provided base64 globals after that SDK release.
-Its OpenTelemetry Resource version matches the upstream lock to keep the
-telemetry test and published interceptor's class declarations compatible.
+Its telemetry test explicitly registers a tracing provider and an in-memory
+exporter. The test environments omit the unused OpenTelemetry Node SDK and its
+Jaeger/Prometheus dependencies.
 
 The development version is `0.0.0`. Packages remain private and final releases
 disabled until the shared npm publication workflow and trusted publishers are

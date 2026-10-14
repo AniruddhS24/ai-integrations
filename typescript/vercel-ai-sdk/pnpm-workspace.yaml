@@ -31,6 +31,3 @@ overrides:
   'minimatch@>=7.0.0 <7.4.8': '>=7.4.8'
   serialize-javascript: '>=7.0.3'
   handlebars: '>=4.7.9'
-  # The imported telemetry tests use sdk-node 0.52.1's Resource class. Keep
-  # interceptor resources on that same SDK-locked version (private class fields).
-  '@opentelemetry/resources@^1.25.1': 1.25.1

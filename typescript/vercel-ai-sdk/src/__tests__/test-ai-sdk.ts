@@ -19,9 +19,17 @@ import type {
 } from '@ai-sdk/provider';
 import { openai } from '@ai-sdk/openai';
 import type { TestFn } from 'ava';
-import * as opentelemetry from '@opentelemetry/sdk-node';
+import { context, propagation, trace } from '@opentelemetry/api';
+import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
+import { Resource } from '@opentelemetry/resources';
+import {
+  BasicTracerProvider,
+  SimpleSpanProcessor,
+  type ReadableSpan,
+  type SpanExporter,
+} from '@opentelemetry/sdk-trace-base';
 import { SEMRESATTRS_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
-import { ExportResultCode } from '@opentelemetry/core';
+import { ExportResultCode, W3CTraceContextPropagator } from '@opentelemetry/core';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -529,14 +537,14 @@ test.serial('Telemetry', async (t) => {
   if (remoteTests) {
     t.timeout(120 * 1000);
   }
-  let otel: opentelemetry.NodeSDK | undefined;
+  let provider: BasicTracerProvider | undefined;
   try {
-    const spans = Array<opentelemetry.tracing.ReadableSpan>();
+    const spans = Array<ReadableSpan>();
 
-    const staticResource = new opentelemetry.resources.Resource({
+    const staticResource = new Resource({
       [SEMRESATTRS_SERVICE_NAME]: 'ts-test-otel-worker',
     });
-    const traceExporter: opentelemetry.tracing.SpanExporter = {
+    const traceExporter: SpanExporter = {
       export(spans_, resultCallback) {
         spans.push(...spans_);
         resultCallback({ code: ExportResultCode.SUCCESS });
@@ -545,11 +553,14 @@ test.serial('Telemetry', async (t) => {
         // Nothing to shutdown
       },
     };
-    otel = new opentelemetry.NodeSDK({
+    provider = new BasicTracerProvider({
       resource: staticResource,
-      traceExporter,
+      spanProcessors: [new SimpleSpanProcessor(traceExporter)],
     });
-    await otel.start();
+    provider.register({
+      contextManager: new AsyncLocalStorageContextManager().enable(),
+      propagator: new W3CTraceContextPropagator(),
+    });
     const sinks: InjectedSinks<OpenTelemetrySinks> = {
       exporter: makeWorkflowExporter(traceExporter, staticResource), // eslint-disable-line @typescript-eslint/no-deprecated
     };
@@ -602,7 +613,10 @@ test.serial('Telemetry', async (t) => {
     const generateSpan = spans.find(({ name }) => name === `invoke_agent gpt-4o-mini`);
     t.true(generateSpan !== undefined);
   } finally {
-    await otel?.shutdown();
+    await provider?.shutdown();
+    context.disable();
+    propagation.disable();
+    trace.disable();
   }
 });
 
