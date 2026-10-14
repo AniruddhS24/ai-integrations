@@ -1,0 +1,5 @@
+{
+  "name": "temporal-checkpoint",
+  "version": "0.1.0",
+  "description": "Checkpoints Claude's model and tool calls in a Temporal workflow"
+}
