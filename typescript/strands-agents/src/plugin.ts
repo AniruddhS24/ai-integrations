@@ -130,9 +130,10 @@ export class StrandsPlugin extends SimplePlugin {
    *
    * - Replace the dynamic-imported MCP transport helpers
    *   (`@modelcontextprotocol/sdk/client/{stdio,sse,streamableHttp}.js` and
-   *   their `node:*` dependencies, plus `eventsource-parser/stream` which
-   *   `streamableHttp.js` reaches) with an empty module. They live in
-   *   `mcp-config.js`'s server-only code paths.
+   *   their `node:*` dependencies, plus `eventsource` and
+   *   `eventsource-parser/stream`) with a stub module. MCP v2 bundles its
+   *   transports into the client entrypoint, so their static EventSource
+   *   imports must also be stubbed. Transport I/O only runs worker-side.
    *
    * - Inline async chunks so the bundle stays a single file — webpack's
    *   default JSONP chunk loader references `self`/`document`, neither of
@@ -208,7 +209,7 @@ interface WebpackCompiler {
 function emptyModuleRewritesPlugin(): WebpackPlugin {
   const empty = require.resolve('./empty-module');
   const ignorePattern =
-    /^(?:node:(?:fs\/promises|os|path|process|stream)|@modelcontextprotocol\/sdk\/client\/(?:stdio|sse|streamableHttp)\.js|eventsource-parser\/stream)$/;
+    /^(?:node:(?:fs\/promises|os|path|process|stream)|@modelcontextprotocol\/sdk\/client\/(?:stdio|sse|streamableHttp)\.js|eventsource|eventsource-parser\/stream)$/;
   return {
     apply(compiler) {
       const { NormalModuleReplacementPlugin } = compiler.webpack;

@@ -22,6 +22,11 @@ Temporal servers and use model doubles or local MCP servers; they need no provid
 credentials. `make build` writes an npm tarball under the plugin's `dist/`.
 CI checks its source, compiled exports and MIT license, then imports it from a
 clean consumer without development dependencies.
+Plugins can also provide `tests/smoke/index.cjs` and workflow fixtures in that
+directory. The smoke runner copies them into the clean consumer, installs the
+declared Temporal Worker and testing versions, and runs the entrypoint. Strands
+uses this to bundle and execute a workflow with a local model against the provider
+version npm selects from its peer range, independently of the development lockfile.
 
 The initial histories come from sdk-typescript `main` at
 `046dcef5e3d5d08710c4a07d805f17fea41e5ae5`. The separate ownership cutover renames
