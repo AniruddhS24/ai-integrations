@@ -62,12 +62,27 @@ def test_ci_status_is_the_fan_in() -> None:
     doc = yaml.safe_load((REPO / ".github/workflows/ci.yml").read_text())
     status = doc["jobs"]["ci-status"]
     assert status["if"] == "always()"
-    assert set(status["needs"]) == {"changes", "conventions", "python", "java", "go"}
-    for language in ("python", "java", "go"):
+    assert set(status["needs"]) == {"changes", "conventions", "python", "java", "go", "typescript"}
+    for language in ("python", "java", "go", "typescript"):
         job = doc["jobs"][language]
         assert job["uses"] == f"./.github/workflows/_{language}-plugin.yml"
         assert "needs.changes.result == 'success'" in job["if"]
         assert f"needs.changes.outputs.{language} != '[]'" in job["if"]
+
+
+def test_typescript_checks_tarball_and_clean_consumer_after_testing() -> None:
+    workflow = yaml.safe_load((REPO / ".github/workflows/_typescript-plugin.yml").read_text())
+    steps = workflow["jobs"]["test"]["steps"]
+    setup_node = next(step for step in steps if step.get("uses", "").startswith("actions/setup-node@"))
+    assert setup_node["with"]["check-latest"] is True
+    test = next(step for step in steps if step.get("name") == "Lint and test")
+    build = next(step for step in steps if step.get("name") == "Build and verify npm package")
+    assert steps.index(test) < steps.index(build)
+    assert "make lint && make test" in test["run"]
+    assert "check_npm_package.py" in build["run"] and "smoke.mjs" in build["run"]
+    assert build["if"] == "matrix.dist"
+    sync = next(step for step in steps if step.get("name") == "Sync dependencies")
+    assert "make sync-latest" in sync["run"] and "make sync" in sync["run"]
 
 
 def test_go_release_reuses_the_full_matrix_and_verifies_the_same_commit() -> None:

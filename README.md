@@ -22,6 +22,8 @@ cadence.
 | [`python/openai_agents`](python/openai_agents) | [![PyPI](https://img.shields.io/pypi/v/temporalio-openai-agents.svg)](https://pypi.org/project/temporalio-openai-agents/) |
 | [`python/strands_agents`](python/strands_agents) | [![PyPI](https://img.shields.io/pypi/v/temporalio-strands-agents.svg)](https://pypi.org/project/temporalio-strands-agents/) (Public Preview) |
 | [`python/typesafe`](python/typesafe) | [![PyPI](https://img.shields.io/pypi/v/temporalio-typesafe.svg)](https://pypi.org/project/temporalio-typesafe/) (Pre-release) |
-
-Go development is documented in [`go/README.md`](go/README.md); publishing
-requirements are in [`AGENTS.md`](AGENTS.md).
+| [`typescript/google-adk`](typescript/google-adk) | `@temporalio/google-adk` (Public Preview) |
+| [`typescript/langsmith`](typescript/langsmith) | `@temporalio/langsmith` (Public Preview) |
+| [`typescript/openai-agents`](typescript/openai-agents) | `@temporalio/openai-agents` |
+| [`typescript/strands-agents`](typescript/strands-agents) | `@temporalio/strands-agents` (Pre-release) |
+| [`typescript/vercel-ai-sdk`](typescript/vercel-ai-sdk) | `@temporalio/vercel-ai-sdk` |
