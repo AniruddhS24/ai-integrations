@@ -1,4 +1,5 @@
 import dataclasses
+import weakref
 from collections.abc import AsyncIterator, Awaitable
 from typing import Any, Callable
 
@@ -74,7 +75,13 @@ def _convert_agent(
                 return _convert_agent(model_params, handoff_agent, seen)
 
             new_handoff = dataclasses.replace(handoff, on_invoke_handoff=on_invoke)
-            new_handoff._agent_ref = handoff._agent_ref
+            handoff_agent = (
+                handoff._agent_ref() if handoff._agent_ref is not None else None
+            )
+            if isinstance(handoff_agent, Agent):
+                new_handoff._agent_ref = weakref.ref(
+                    _convert_agent(model_params, handoff_agent, seen)
+                )
             new_handoffs.append(new_handoff)
         else:
             raise TypeError(f"Unknown handoff type: {type(handoff)}")
