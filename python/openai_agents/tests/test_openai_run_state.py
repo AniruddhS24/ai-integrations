@@ -358,27 +358,48 @@ async def test_shared_handoff_target_tool_restores_nested_approval(
 
 @pytest.mark.parametrize("streamed", [False, True])
 @pytest.mark.parametrize("change", ["instructions", "tools"])
-async def test_handoff_callback_updates_cached_target(
-    streamed: bool, change: Literal["instructions", "tools"]
+@pytest.mark.parametrize("graph", ["target", "downstream", "shared_cycle"])
+async def test_handoff_callback_updates_cached_graph(
+    streamed: bool,
+    change: Literal["instructions", "tools"],
+    graph: Literal["target", "downstream", "shared_cycle"],
 ) -> None:
     banker = Agent[None](name="Banker", instructions="Before callback.")
+    target = (
+        banker
+        if graph == "target"
+        else Agent[None](name="Other", instructions="Other", handoffs=[banker])
+    )
+    handoff_count = 0
 
     async def configure_target(_context: RunContextWrapper[None]) -> None:
+        nonlocal handoff_count
+        handoff_count += 1
         if change == "instructions":
-            banker.instructions = "After callback."
+            banker.instructions = f"After callback {handoff_count}."
         else:
             banker.tools = [transfer_funds]
 
     triage = Agent[None](
         name="Triage",
         instructions="Triage",
-        handoffs=[handoff(banker, on_handoff=configure_target)],
+        handoffs=[handoff(target, on_handoff=configure_target)],
     )
+    if graph == "shared_cycle":
+        banker.handoffs = [triage]
+        triage.handoffs.append(banker)
+        triage.tools = [
+            banker.as_tool(tool_name="ask_banker", tool_description="Ask Banker")
+        ]
 
     def reply(
         instructions: str | None, input: str | list[TResponseInputItem]
     ) -> ModelResponse:
         if instructions == "Triage":
+            return ResponseBuilders.tool_call(
+                "{}", f"transfer_to_{target.name.lower()}", call_id="triage-target"
+            )
+        if instructions == "Other":
             return ResponseBuilders.tool_call(
                 "{}", "transfer_to_banker", call_id="triage-banker"
             )
@@ -388,17 +409,18 @@ async def test_handoff_callback_updates_cached_target(
 
     config = RunConfig(model=ScriptedModel(reply))
     converted = _convert_agent(ModelActivityParameters(), triage, None)
-    result = await _run(
-        converted, "Move 5 dollars.", streamed=streamed, run_config=config
-    )
-    if change == "instructions":
-        assert result.final_output == "After callback."
-    else:
-        assert len(result.interruptions) == 1
-        restored = await RunState.from_string(triage, result.to_state().to_string())
-        assert await _approve_and_resume(
-            triage, restored, streamed=streamed, run_config=config
-        ) == ["Transfer complete.", "transferred 5"]
+    for invocation in range(1, 3):
+        result = await _run(
+            converted, "Move 5 dollars.", streamed=streamed, run_config=config
+        )
+        if change == "instructions":
+            assert result.final_output == f"After callback {invocation}."
+        else:
+            assert len(result.interruptions) == 1
+            restored = await RunState.from_string(triage, result.to_state().to_string())
+            assert await _approve_and_resume(
+                triage, restored, streamed=streamed, run_config=config
+            ) == ["Transfer complete.", "transferred 5"]
 
 
 @workflow.defn
