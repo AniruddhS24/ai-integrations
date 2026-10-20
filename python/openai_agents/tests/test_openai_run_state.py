@@ -14,7 +14,7 @@ import uuid
 import weakref
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import timedelta
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 from agents import (
@@ -278,6 +278,127 @@ async def test_converted_handoff_restores_tool_use_after_resume(
     )
     assert result.final_output == "Transfer complete."
     assert model.seen_model_settings[0].tool_choice is None
+
+
+@pytest.mark.parametrize("streamed", [False, True])
+@pytest.mark.parametrize("shared_target", ["agent", "tool", "both"])
+async def test_shared_handoff_target_restores_after_approval(
+    streamed: bool, shared_target: Literal["agent", "tool", "both"]
+) -> None:
+    banker = _make_banker()
+    other = Agent[None](name="Other", instructions="Other", handoffs=[handoff(banker)])
+    triage = Agent[None](name="Triage", instructions="Triage", handoffs=[other])
+    if shared_target in ("agent", "both"):
+        triage.handoffs.append(banker)
+    if shared_target in ("tool", "both"):
+        triage.tools.append(
+            banker.as_tool(tool_name="ask_banker", tool_description="Ask Banker")
+        )
+
+    def reply(
+        instructions: str | None, input: str | list[TResponseInputItem]
+    ) -> ModelResponse:
+        if instructions == "Triage":
+            return ResponseBuilders.tool_call(
+                "{}", "transfer_to_other", call_id="triage-other"
+            )
+        if instructions == "Other":
+            return ResponseBuilders.tool_call(
+                "{}", "transfer_to_banker", call_id="other-banker"
+            )
+        return _banker_reply(instructions, input)
+
+    config = RunConfig(model=ScriptedModel(reply))
+    converted = _convert_agent(ModelActivityParameters(), triage, None)
+    result = await _run(
+        converted, "Move 5 dollars.", streamed=streamed, run_config=config
+    )
+    assert len(result.interruptions) == 1
+    restored = await RunState.from_string(triage, result.to_state().to_string())
+    assert await _approve_and_resume(
+        triage, restored, streamed=streamed, run_config=config
+    ) == ["Transfer complete.", "transferred 5"]
+
+
+@pytest.mark.parametrize("streamed", [False, True])
+async def test_shared_handoff_target_tool_restores_nested_approval(
+    streamed: bool,
+) -> None:
+    banker = _make_banker()
+    triage = Agent[None](
+        name="Triage",
+        instructions="Triage",
+        handoffs=[handoff(banker)],
+        tools=[banker.as_tool(tool_name="ask_banker", tool_description="Ask Banker")],
+    )
+
+    def reply(
+        instructions: str | None, input: str | list[TResponseInputItem]
+    ) -> ModelResponse:
+        if instructions != "Triage":
+            return _banker_reply(instructions, input)
+        if _has_tool_output(input, "ask-banker"):
+            return ResponseBuilders.output_message("Done.")
+        return ResponseBuilders.tool_call(
+            '{"input": "Move 5 dollars."}', "ask_banker", call_id="ask-banker"
+        )
+
+    config = RunConfig(model=ScriptedModel(reply))
+    converted = _convert_agent(ModelActivityParameters(), triage, None)
+    result = await _run(
+        converted, "Move 5 dollars.", streamed=streamed, run_config=config
+    )
+    assert len(result.interruptions) == 1
+    restored = await RunState.from_string(triage, result.to_state().to_string())
+    resumed = await _approve_and_resume(
+        triage, restored, streamed=streamed, run_config=config
+    )
+    assert resumed[0] == "Done."
+
+
+@pytest.mark.parametrize("streamed", [False, True])
+@pytest.mark.parametrize("change", ["instructions", "tools"])
+async def test_handoff_callback_updates_cached_target(
+    streamed: bool, change: Literal["instructions", "tools"]
+) -> None:
+    banker = Agent[None](name="Banker", instructions="Before callback.")
+
+    async def configure_target(_context: RunContextWrapper[None]) -> None:
+        if change == "instructions":
+            banker.instructions = "After callback."
+        else:
+            banker.tools = [transfer_funds]
+
+    triage = Agent[None](
+        name="Triage",
+        instructions="Triage",
+        handoffs=[handoff(banker, on_handoff=configure_target)],
+    )
+
+    def reply(
+        instructions: str | None, input: str | list[TResponseInputItem]
+    ) -> ModelResponse:
+        if instructions == "Triage":
+            return ResponseBuilders.tool_call(
+                "{}", "transfer_to_banker", call_id="triage-banker"
+            )
+        if change == "tools":
+            return _banker_reply(instructions, input)
+        return ResponseBuilders.output_message(instructions or "")
+
+    config = RunConfig(model=ScriptedModel(reply))
+    converted = _convert_agent(ModelActivityParameters(), triage, None)
+    result = await _run(
+        converted, "Move 5 dollars.", streamed=streamed, run_config=config
+    )
+    if change == "instructions":
+        assert result.final_output == "After callback."
+    else:
+        assert len(result.interruptions) == 1
+        restored = await RunState.from_string(triage, result.to_state().to_string())
+        assert await _approve_and_resume(
+            triage, restored, streamed=streamed, run_config=config
+        ) == ["Transfer complete.", "transferred 5"]
 
 
 @workflow.defn

@@ -6,6 +6,7 @@ from typing import Any, Callable
 from agents import (
     Agent,
     AgentsException,
+    FunctionTool,
     Handoff,
     RunConfig,
     RunContextWrapper,
@@ -38,21 +39,27 @@ def _convert_agent(
     model_params: ModelActivityParameters,
     agent: Agent[Any],
     seen: dict[int, Agent] | None,
+    *,
+    refresh: bool = False,
 ) -> Agent[Any]:
     if seen is None:
         seen = dict()
 
-    # Short circuit if this model was already seen to prevent looping from circular handoffs
-    if id(agent) in seen:
-        return seen[id(agent)]
+    new_agent = seen.get(id(agent))
+    if new_agent is not None and not refresh:
+        return new_agent
 
     # This agent has already been processed in some other run
     if isinstance(agent.model, _TemporalModelStub):
         return agent
 
-    # Save the new version of the agent so that we can replace loops
-    new_agent = dataclasses.replace(agent)
-    seen[id(agent)] = new_agent
+    if new_agent is None:
+        new_agent = dataclasses.replace(agent)
+        seen[id(agent)] = new_agent
+    else:
+        for field in dataclasses.fields(agent):
+            if field.init:
+                setattr(new_agent, field.name, getattr(agent, field.name))
 
     name = _model_name(agent)
 
@@ -72,7 +79,7 @@ def _convert_agent(
                 ] = original_invoke,
             ) -> Agent:
                 handoff_agent = await invoke_func(context, args)
-                return _convert_agent(model_params, handoff_agent, seen)
+                return _convert_agent(model_params, handoff_agent, seen, refresh=True)
 
             new_handoff = dataclasses.replace(handoff, on_invoke_handoff=on_invoke)
             handoff_agent = (
@@ -92,6 +99,15 @@ def _convert_agent(
         agent=agent,
     )
     new_agent.handoffs = new_handoffs
+    new_agent.tools = [
+        dataclasses.replace(
+            tool,
+            _agent_instance=_convert_agent(model_params, tool._agent_instance, seen),
+        )
+        if isinstance(tool, FunctionTool) and isinstance(tool._agent_instance, Agent)
+        else tool
+        for tool in agent.tools
+    ]
     return new_agent
 
 
