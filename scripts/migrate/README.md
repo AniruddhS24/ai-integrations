@@ -129,9 +129,9 @@ original entry in the generated `.git/filter-repo/commit-map`, not just the tip.
 
 Add local metadata, make targets and the root LICENSE copy as a separate
 adaptation commit. Remove the upstream `CHANGELOG.md` from the current tree
-in that commit, retaining its history to follow this repository's generated
-release-notes policy. While `plugin.toml` names an active upstream, preserve
-this deletion during re-sync and do not edit the imported source, tests or README.
+in that commit, retaining it in Git history. While `plugin.toml` names an active
+upstream, preserve this deletion during re-sync and do not edit the imported source,
+tests or README.
 
 Google ADK's initial setup retained the upstream module path. A separate local
 API cutover, requested after the import, renames it to `go.temporal.io/googleadk`
@@ -140,9 +140,6 @@ active `upstream` field is removed because this repository now owns the code.
 The original UUID and span random-stream identifiers remain stable for replay
 compatibility. The extraction script and imported commit graph stay unchanged.
 Go CI now runs the shared make targets across the declared runtimes and platforms.
-The shared Go release workflow is available. Final releases remain disabled until
-vanity routing is verified; the subdirectory mapping and release runbook are
-documented in AGENTS.md.
 
 An explicitly requested final re-sync before the import PR merged brought in
 upstream `main` at `6ae07bca8301bd25ba1358d1ea92ae837932d76b` on 2026-10-08.
@@ -201,11 +198,10 @@ helpers are copied only where used: `new_worker` for Google GenAI and LangSmith,
 helpers for LangSmith, and the span formatter and provider-reset fixtures for Google ADK.
 DeepAgents sets the low history-count threshold required by its server-suggested continue-as-new
 test. Its README tests point at the standalone distribution README. Provider tests use
-local models, mock transports or in-process MCP servers. Final releases are enabled
-after the API cutover; the committed development version remains `0.0.0`.
+local models, mock transports or in-process MCP servers.
 
 Google GenAI and Strands README links resolve SDK-owned dependencies to the pinned SDK
-tree. The conventions check validates the README actually published.
+tree. The conventions check validates these README links.
 
 The shared make targets use the committed lockfile for regular checks and re-lock to
 the newest allowed dependencies on nightly runs. Lint and tests use `uv run --locked`
@@ -217,8 +213,7 @@ types before workflow tasks to avoid cold-import deadlock detection on Python 3.
 
 At the final audit, 63 issues and 16 PRs were open. A new draft,
 [sdk-python#1923](https://github.com/temporalio/sdk-python/pull/1923), removes the bundled
-implementations and forwards to the planned final APIs. It depends on publishing these
-packages after cutover and is not an import input. The newer SDK main commit
+implementations and forwards to the planned final APIs. It is not an import input. The newer SDK main commit
 `3f29fd7935f9a03fbe86f24624dfe6458872098e` does not change the five plugins pinned to
 `6adc0d84290a79952dee3ef02c36f6ed9334874a`.
 
@@ -238,3 +233,52 @@ are unchanged; the upstream README and build are archived under `_upstream/`.
 Merge the extracted branch with unrelated histories allowed, record the merge in
 IMPORTS.md, and label only the import PR `history-import`. The GitHub PR must use
 Create a merge commit. Gradle and MIT licensing adaptations are separate commits.
+
+## TypeScript AI history imports (2026-10-14)
+
+`extract-sdk-typescript.sh` imports each integration separately from the upstream
+default branch, pinned initially to `046dcef5e3d5d08710c4a07d805f17fea41e5ae5`.
+It uses the same frozen git-filter-repo 2.47.0 settings and provenance trailers
+as the Go extractor, qualifying issue references as `temporalio/sdk-typescript#NNN`.
+
+| Destination | Upstream paths | Commits | Identities | Tip files |
+|---|---|---|---|---|
+| vercel-ai-sdk | `contrib/ai-sdk/`, `packages/ai-sdk/`, three former `packages/test` files below | 49 | 13 | 16 |
+| google-adk | `contrib/google-adk-agents/` | 14 | 5 | 50 |
+| langsmith | `contrib/langsmith/` | 19 | 6 | 33 |
+| openai-agents | `contrib/openai-agents/` | 24 | 5 | 81 |
+| strands-agents | `contrib/strands/` | 15 | 8 | 21 |
+
+Vercel AI SDK began in `packages/ai-sdk/` in `f76f34ed` (#1792). Commit
+`e704c48f` (#1910) moved it to `contrib/ai-sdk/` along with
+`packages/test/src/activities/ai-sdk.ts`, `packages/test/src/test-ai-sdk.ts`, and
+`packages/test/src/workflows/ai-sdk.ts`. The extractor maps those tests into
+`src/__tests__/`. Its `.mjs` to `.ts` test-runner rename stays inside the plugin.
+The other four integrations originated under their current contrib directories.
+`git log --follow` also reports copied package manifests, configuration and
+shared OpenTelemetry test helpers; those copies are not earlier plugin locations
+and their unrelated package histories are excluded.
+
+```bash
+git switch -c import/typescript-ai-integrations origin/main
+PLUGIN=vercel-ai-sdk SRC_REF=046dcef5e3d5d08710c4a07d805f17fea41e5ae5 \
+  scripts/migrate/extract-sdk-typescript.sh
+git fetch --no-tags "$WORK" main # WORK is the filtered clone printed by the script
+git merge --allow-unrelated-histories --no-ff \
+  -m "Import vercel-ai-sdk from temporalio/sdk-typescript@046dcef5 (history preserved; git-filter-repo 2.47.0)" \
+  FETCH_HEAD
+```
+
+Repeat for the other four destination names. Every retained filtered tree was
+compared with the source commit's mapped file modes and blob IDs; authors,
+committers, timestamps and provenance trailers were checked for all 121 commits.
+No upstream tags were imported. Record all five merge commits in IMPORTS.md.
+The import PR must have `history-import` and use **Create a merge commit**.
+
+The user explicitly requested an ownership cutover after these imports. Separate
+adaptations rename the Vercel and Google ADK package coordinates, remove active
+upstream metadata, add independent lockfiles and shared CI, and copy the SDK's
+unpublished test helpers into each consuming plugin. Vercel's standalone test
+and published-SDK base64 compatibility changes are documented in
+`typescript/README.md`. The original imported commits remain untouched. These
+plugins are now owned here; do not re-sync them using the frozen extractor.

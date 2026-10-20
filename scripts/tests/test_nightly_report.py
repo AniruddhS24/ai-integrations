@@ -32,7 +32,7 @@ def test_classify_aggregates_results_by_plugin() -> None:
 
 def test_report_matches_ci_workflow_job_names() -> None:
     workflow = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text())
-    for language, expected_name in (("python", "Python"), ("java", "Java"), ("go", "Go")):
+    for language, expected_name in (("python", "Python"), ("java", "Java"), ("go", "Go"), ("typescript", "TypeScript")):
         names = {
             job["name"]
             for job in workflow["jobs"].values()
@@ -44,7 +44,16 @@ def test_report_matches_ci_workflow_job_names() -> None:
         match = nightly_report.JOB_RE.match(f"{expected_name} (fakeplug) / matrix")
         assert match is not None and match.group("plugin") == "fakeplug"
         assert match.group("language") == expected_name
-    assert {"python", "java", "go"}.issubset(workflow["jobs"]["nightly-report"]["needs"])
+    assert {"python", "java", "go", "typescript"}.issubset(workflow["jobs"]["nightly-report"]["needs"])
+
+
+def test_typescript_and_python_langsmith_have_separate_nightly_issues() -> None:
+    failing, passing = nightly_report.classify([
+        _job("TypeScript (langsmith) / langsmith (ubuntu-latest, node24)", "failure"),
+        _job("Python (langsmith) / langsmith (ubuntu-latest, py3.14)", "success"),
+    ])
+    assert failing == {"typescript/langsmith"}
+    assert passing == {"langsmith"}
 
 
 def test_classify_go_failures_and_keep_language_identities_separate() -> None:

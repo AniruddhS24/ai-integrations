@@ -6,9 +6,6 @@ tools execute through the ChatClient tool-calling advisor on the workflow thread
 
 The new coordinate is `io.temporal:spring-ai` on
 [Maven Central](https://central.sonatype.com/artifact/io.temporal/spring-ai).
-The first Public Preview release is **0.1.0**, with **0.1.0-RC1** staged privately
-in Central Portal first. After `0.1.0` is published, sdk-java publishes a relocation
-POM from the next `io.temporal:temporal-spring-ai` version to the new coordinate.
 CI tests Java 17 and 25; published bytecode targets Java 17.
 
 ## Requirements and installation
@@ -18,7 +15,7 @@ CI tests Java 17 and 25; published bytecode targets Java 17.
 - Temporal Java SDK and `temporal-spring-boot-starter` 1.40.0 or later.
 - A Spring AI provider starter for your chosen model. This integration supplies no provider.
 
-After the standalone final release is available:
+Install the standalone integration:
 
 ```groovy
 implementation 'io.temporal:spring-ai:0.1.0'
@@ -106,14 +103,8 @@ To run that check locally:
 ```
 
 Latest mode writes a separate ignored lockfile and reuses its selected versions
-through testing and building. Ordinary CI and releases use the committed locks.
+through testing and building. Ordinary CI uses the committed locks.
 
-Committed development builds use `0.0.0`. CI supplies `-PreleaseVersion=<version>`
-from an immutable release tag before testing and building. No placeholder versions
-or snapshots are published.
-
-TRANSITION(sdk-cutover): final standalone publication awaits the agreed SDK
-cutover plan. Publish the new package before sdk-java publishes the old
-coordinate's relocation POM. The imported implementation and tests,
-as well as the migration adaptations, are relicensed under the repository's MIT
+The imported implementation and tests, as well as the migration adaptations,
+are relicensed under the repository's MIT
 license. Historical upstream commits retain their original licensing records.

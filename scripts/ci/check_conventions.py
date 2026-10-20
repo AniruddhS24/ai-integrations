@@ -10,6 +10,7 @@ Checks (see AGENTS.md, "Repository invariants" and "Python conventions"):
   * python/_shared contains configuration and make logic, never Python source or stubs
   * every Python plugin has pyproject.toml, uv.lock, plugin.toml, Makefile, README.md,
     and {root-api}/{__init__.py,py.typed} under src/
+  * every Java plugin loads the shared plugin repositories from its initial pluginManagement block
   * NO src/temporalio/__init__.py and NO src/temporalio/contrib/__init__.py (namespace invariant)
   * LICENSE is a committed regular file byte-identical to the root LICENSE; pyproject declares license = "MIT"
     and license-files = ["LICENSE"]; no CHANGELOG*, no smoke_test.py in the plugin dir
@@ -23,6 +24,7 @@ Checks (see AGENTS.md, "Repository invariants" and "Python conventions"):
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import stat
 import subprocess
@@ -52,7 +54,15 @@ STANDARD_TEST_SUPPORT = {
     "tests/test_env.py": "tests/test_env.py.tmpl",
     "tests/test_installed_matches_source.py": "tests/test_installed_matches_source.py.tmpl",
 }
+STANDARD_TYPESCRIPT_TEST_SUPPORT = {
+    "src/__tests__/helpers/environment.ts": "src/__tests__/helpers/environment.ts.tmpl",
+    "src/__tests__/test-environment-startup.test.ts": "src/__tests__/test-environment-startup.test.ts.tmpl",
+}
 PYTHON_DEVELOPMENT_VERSION = "0.0.0"
+JAVA_PLUGIN_MANAGEMENT = """pluginManagement {
+    apply from: '../_shared/settings.gradle'
+}
+"""
 
 
 class Checker:
@@ -167,19 +177,24 @@ class Checker:
         self.check_standard_test_support(plugin)
 
     def check_standard_test_support(self, plugin: Plugin) -> None:
-        template_root = self.root / "python" / "_template"
+        template_rel_root = f"{plugin.language}/_template"
+        template_root = self.root / template_rel_root
         if not template_root.is_dir():
             return
-        for plugin_rel, template_rel in STANDARD_TEST_SUPPORT.items():
+        support_files = {
+            "python": STANDARD_TEST_SUPPORT,
+            "typescript": STANDARD_TYPESCRIPT_TEST_SUPPORT,
+        }[plugin.language]
+        for plugin_rel, template_rel in support_files.items():
             plugin_path = plugin.path / plugin_rel
             template_path = template_root / template_rel
             if not plugin_path.is_file():
                 self.fail(f"{plugin.rel}: missing standard test support file {plugin_rel}")
             elif not template_path.is_file():
-                self.fail(f"python/_template/{template_rel}: missing canonical test support template")
+                self.fail(f"{template_rel_root}/{template_rel}: missing canonical test support template")
             elif plugin_path.read_bytes() != template_path.read_bytes():
                 self.fail(
-                    f"{plugin.rel}/{plugin_rel}: differs from canonical python/_template/{template_rel}"
+                    f"{plugin.rel}/{plugin_rel}: differs from canonical {template_rel_root}/{template_rel}"
                 )
 
     def check_java_plugin(self, plugin: Plugin) -> None:
@@ -189,6 +204,14 @@ class Checker:
                          "gradle/wrapper/gradle-wrapper.properties"):
             if not (d / required).is_file():
                 self.fail(f"{rel}: missing {required}")
+        settings = d / "settings.gradle"
+        if settings.is_file() and not settings.read_text().lstrip().startswith(JAVA_PLUGIN_MANAGEMENT):
+            self.fail(
+                f"{rel}/settings.gradle: must start with the shared pluginManagement block:\n"
+                f"{JAVA_PLUGIN_MANAGEMENT.rstrip()}"
+            )
+        if not (self.root / "java/_shared/settings.gradle").is_file():
+            self.fail("java/_shared/settings.gradle: missing shared plugin repository configuration")
         if not (d / "plugin.toml").is_file():
             return
         meta = load_toml(d / "plugin.toml")
@@ -232,6 +255,52 @@ class Checker:
             self.fail(f"{rel}: Gradle distribution checksum must be pinned")
         if any(path.name.upper().startswith("CHANGELOG") for path in d.iterdir()):
             self.fail(f"{rel}: release notes are generated; no changelog files")
+
+    def check_typescript_plugin(self, plugin: Plugin) -> None:
+        d, rel = plugin.path, plugin.rel
+        for required in ("package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "plugin.toml",
+                         "tsconfig.json", "Makefile", "README.md", "LICENSE"):
+            if not (d / required).is_file():
+                self.fail(f"{rel}: missing {required}")
+        if not (d / "plugin.toml").is_file():
+            return
+        package = json.loads((d / "package.json").read_text())
+        meta = load_toml(d / "plugin.toml")
+        coordinate = f"@temporalio/{plugin.name}"
+        p = meta.get("plugin", {})
+        for key, expected in {"name": plugin.name, "language": "typescript", "registry": "npm",
+                              "coordinate": coordinate, "root-api": coordinate}.items():
+            if p.get(key) != expected:
+                self.fail(f"{rel}: plugin.toml {key} must be {expected!r}")
+        if package.get("name") != coordinate or package.get("version") != "0.0.0":
+            self.fail(f"{rel}: package.json must name {coordinate} with development version 0.0.0")
+        if p.get("maturity") not in MATURITY_CLASSIFIER:
+            self.fail(f"{rel}: invalid maturity")
+        if not isinstance(meta.get("release", {}).get("allow-final"), bool):
+            self.fail(f"{rel}: allow-final must be boolean")
+        versions = meta.get("ci", {}).get("runtime-versions", [])
+        floor = package.get("engines", {}).get("node", "").removeprefix(">=")
+        if (not versions or not all(isinstance(version, str) and version.isdigit() for version in versions)
+                or versions[0] != floor.split(".")[0]):
+            self.fail(f"{rel}: runtime-versions must list Node majors starting with the Node engine floor's major")
+        if meta.get("smoke", {}).get("imports") != [coordinate]:
+            self.fail(f"{rel}: smoke imports must name the root package")
+        for section in ("dependencies", "peerDependencies", "optionalDependencies", "devDependencies"):
+            for name, version in package.get(section, {}).items():
+                if name == "@temporalio/test-helpers" and section == "devDependencies" and version == "link:tests/helpers":
+                    continue
+                if version.startswith(("workspace:", "link:", "file:")):
+                    self.fail(f"{rel}: {section} {name} must use a published registry coordinate")
+        license_path = d / "LICENSE"
+        if not license_path.is_file() or license_path.is_symlink():
+            self.fail(f"{rel}: LICENSE must be a regular file")
+        elif f"{rel}/LICENSE" not in self.tracked_files(rel):
+            self.fail(f"{rel}: LICENSE must be committed")
+        elif license_path.read_bytes() != (self.root / "LICENSE").read_bytes():
+            self.fail(f"{rel}: LICENSE differs from root")
+        if any(path.name.upper().startswith("CHANGELOG") for path in d.iterdir()):
+            self.fail(f"{rel}: release notes are generated; no changelog files")
+        self.check_standard_test_support(plugin)
 
     def check_plugin_toml(self, plugin: Plugin, meta: dict[str, Any], pyproject: dict[str, Any]) -> None:
         rel = plugin.rel
@@ -373,6 +442,8 @@ class Checker:
             self.check_python_plugin(plugin)
         for plugin in discovered["java"]:
             self.check_java_plugin(plugin)
+        for plugin in discovered["typescript"]:
+            self.check_typescript_plugin(plugin)
         if nightly:
             self.check_nightly(discovered["python"])
         return self.violations
